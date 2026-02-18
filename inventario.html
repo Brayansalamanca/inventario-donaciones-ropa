@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Inventario de Ropa</title>
+
+<style>
+body{
+    background:#e2cbcb;
+    font-family:Arial;
+    text-align:center;
+    color:#272b2e;
+}
+
+button{
+    padding:6px 12px;
+    margin:4px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    color:white;
+    background-color: #272b2e;
+}
+button:hover{
+    padding:8px 16px;
+    background-color: #41494e;
+}
+
+.btn-apartar{ background:#e74c3c; }
+.btn-disponible{ background:#27ae60; }
+.btn-eliminar{ background:#34495e; }
+.btn-editar{ background:#f39c12; }
+.btn-guardar{ background:#2980b9; }
+.btn-cancelar{ background:#7f8c8d; }
+
+input, select{
+    padding:6px;
+    border-radius:6px;
+    border:1px solid #ccc;
+}
+
+table{
+    width:85%;
+    margin:20px auto;
+    border-collapse:collapse;
+    background:rgb(214,171,171);
+}
+
+td,th{
+    border:1px solid #0c0c0c;
+    padding:8px;
+}
+
+.miniatura{
+    width:60px;
+    height:60px;
+    object-fit:cover;
+    cursor:pointer;
+    border-radius:6px;
+}
+
+h2{ margin-top:40px; }
+
+#visor{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.9);
+    justify-content:center;
+    align-items:center;
+}
+
+#imgGrande{
+    width:60vw;
+    max-height:80vh;
+    transition:transform .3s ease;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Inventario de Ropa</h1>
+
+<label><b>Objeto</b></label>
+<select id="objeto">
+<option value="">Seleccionar</option>
+<option>Saco</option>
+<option>Torero</option>
+<option>Joger</option>
+<option>Pantalón</option>
+<option>Pantaloneta</option>
+<option>Falda</option>
+<option>Camiseta deportiva</option>
+<option>Camiseta formal</option>
+</select>
+
+Talla <input id="talla">
+<input type="file" id="imagen">
+<button onclick="agregar()">Agregar</button>
+
+<br><br>
+<input id="busqueda" placeholder="Buscar..." onkeyup="dibujar()">
+
+<h2>🟢 DISPONIBLES</h2>
+<table>
+<thead>
+<tr>
+<th>Imagen</th>
+<th>Objeto</th>
+<th>Talla</th>
+<th>Acción</th>
+</tr>
+</thead>
+<tbody id="tablaDisponibles"></tbody>
+</table>
+
+<h2>🔴 APARTADOS</h2>
+<table>
+<thead>
+<tr>
+<th>Imagen</th>
+<th>Objeto</th>
+<th>Talla</th>
+<th>Nombre</th>
+<th>Acción</th>
+</tr>
+</thead>
+<tbody id="tablaApartados"></tbody>
+</table>
+
+<div id="visor" onclick="cerrarVisor()">
+<img id="imgGrande" onclick="zoomClick(event)">
+</div>
+
+<script>
+let inventario = JSON.parse(localStorage.getItem("inventario")) || [];
+let zoomNivel=1;
+let editandoIndex=null;
+
+function guardar(){
+    localStorage.setItem("inventario",JSON.stringify(inventario));
+}
+
+function agregar(){
+    const objeto=document.getElementById("objeto").value;
+    const talla=document.getElementById("talla").value.trim();
+    const file=document.getElementById("imagen").files[0];
+
+    if(objeto==""||talla==""||!file){
+        alert("Completa todos los campos");
+        return;
+    }
+
+    const reader=new FileReader();
+    reader.onload=e=>{
+        inventario.push({
+            objeto,
+            talla,
+            estado:"Disponible",
+            nombre:"",
+            imagen:e.target.result
+        });
+        guardar();
+        dibujar();
+    }
+    reader.readAsDataURL(file);
+}
+
+function dibujar(){
+    let disponibles="";
+    let apartados="";
+    let filtro=document.getElementById("busqueda").value.toLowerCase();
+
+    inventario.forEach((p,index)=>{
+
+        if(!p.objeto.toLowerCase().includes(filtro) &&
+           !p.talla.toLowerCase().includes(filtro)) return;
+
+        if(editandoIndex===index){
+            if(p.estado=="Disponible"){
+                disponibles+=filaEdicion(p,index);
+            }else{
+                apartados+=filaEdicion(p,index,true);
+            }
+        }else{
+            if(p.estado=="Disponible"){
+                disponibles+=filaNormal(p,index);
+            }else{
+                apartados+=filaNormal(p,index,true);
+            }
+        }
+    });
+
+    tablaDisponibles.innerHTML=disponibles;
+    tablaApartados.innerHTML=apartados;
+}
+
+function filaNormal(p,index,apartado=false){
+return `
+<tr>
+<td><img class="miniatura" src="${p.imagen}" onclick="verImagen('${p.imagen}')"></td>
+<td>${p.objeto}</td>
+<td>${p.talla}</td>
+${apartado?`<td>${p.nombre}</td>`:""}
+<td>
+${p.estado=="Disponible"?
+`<button class="btn-apartar" onclick="apartar(${index})">Apartar</button>`:
+`<button class="btn-disponible" onclick="disponible(${index})">Disponible</button>`}
+<button class="btn-editar" onclick="editar(${index})">Editar</button>
+<button class="btn-eliminar" onclick="eliminar(${index})">Eliminar</button>
+</td>
+</tr>`;
+}
+
+function filaEdicion(p,index,apartado=false){
+return `
+<tr>
+<td>
+<img class="miniatura" src="${p.imagen}">
+<br>
+<input type="file" id="editImg${index}">
+</td>
+<td>
+<select id="editObj${index}">
+<option ${p.objeto=="Saco"?"selected":""}>Saco</option>
+<option ${p.objeto=="Torero"?"selected":""}>Torero</option>
+<option ${p.objeto=="Joger"?"selected":""}>Joger</option>
+<option ${p.objeto=="Pantalón"?"selected":""}>Pantalón</option>
+<option ${p.objeto=="Pantaloneta"?"selected":""}>Pantaloneta</option>
+<option ${p.objeto=="Falda"?"selected":""}>Falda</option>
+<option ${p.objeto=="Camiseta deportiva"?"selected":""}>Camiseta deportiva</option>
+<option ${p.objeto=="Camiseta formal"?"selected":""}>Camiseta formal</option>
+</select>
+</td>
+<td><input id="editTalla${index}" value="${p.talla}"></td>
+${apartado?`<td><input id="editNombre${index}" value="${p.nombre}"></td>`:""}
+<td>
+<button class="btn-guardar" onclick="guardarEdicion(${index})">Guardar</button>
+<button class="btn-cancelar" onclick="cancelar()">Cancelar</button>
+</td>
+</tr>`;
+}
+
+function editar(index){
+    editandoIndex=index;
+    dibujar();
+}
+
+function guardarEdicion(index){
+    let nuevoObjeto=document.getElementById("editObj"+index).value;
+    let nuevaTalla=document.getElementById("editTalla"+index).value;
+    let nuevaImagen=document.getElementById("editImg"+index).files[0];
+
+    inventario[index].objeto=nuevoObjeto;
+    inventario[index].talla=nuevaTalla;
+
+    if(inventario[index].estado=="Apartado"){
+        inventario[index].nombre=document.getElementById("editNombre"+index).value;
+    }
+
+    if(nuevaImagen){
+        let reader=new FileReader();
+        reader.onload=e=>{
+            inventario[index].imagen=e.target.result;
+            finalizarEdicion();
+        }
+        reader.readAsDataURL(nuevaImagen);
+    }else{
+        finalizarEdicion();
+    }
+}
+
+function finalizarEdicion(){
+    editandoIndex=null;
+    guardar();
+    dibujar();
+}
+
+function cancelar(){
+    editandoIndex=null;
+    dibujar();
+}
+
+function apartar(index){
+    let nombre=prompt("Nombre:");
+    if(nombre){
+        inventario[index].estado="Apartado";
+        inventario[index].nombre=nombre;
+        guardar();
+        dibujar();
+    }
+}
+
+function disponible(index){
+    inventario[index].estado="Disponible";
+    inventario[index].nombre="";
+    guardar();
+    dibujar();
+}
+
+function eliminar(index){
+    inventario.splice(index,1);
+    guardar();
+    dibujar();
+}
+
+function verImagen(src){
+    imgGrande.src=src;
+    zoomNivel=1;
+    imgGrande.style.transform="scale(1)";
+    visor.style.display="flex";
+}
+
+function zoomClick(e){
+    e.stopPropagation();
+    zoomNivel=zoomNivel==1?2:1;
+    imgGrande.style.transform="scale("+zoomNivel+")";
+}
+
+function cerrarVisor(){
+    visor.style.display="none";
+}
+
+dibujar();
+</script>
+
+</body>
+</html>
